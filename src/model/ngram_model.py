@@ -164,6 +164,8 @@ class NGramModel:
         Returns:
             None.
         """
+        
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
         with open(model_path, 'w') as f:
             json.dump(self.model, f, indent=2)
 
@@ -177,6 +179,8 @@ class NGramModel:
         Returns:
             None.
         """
+        
+        os.makedirs(os.path.dirname(vocab_path), exist_ok=True)
         with open(vocab_path, 'w') as f:
             json.dump(self.vocab_list, f, indent=2)
 
