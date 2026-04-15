@@ -143,6 +143,9 @@ class Normalizer:
             sentences (list[list[str]]): List of tokenized sentences (each sentence is a list of tokens).
             filepath (str): Path to the output file.
         """
+        
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
         with open(filepath, 'w', encoding='utf-8') as f:
             for sentence in sentences:
                 f.write(' '.join(sentence) + '\n')
