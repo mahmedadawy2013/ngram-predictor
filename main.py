@@ -1,18 +1,41 @@
 import os
+import sys
+import logging
 import argparse
 from dotenv import load_dotenv
-from src.data_prep.normalizer import Normalizer
-from src.model.ngram_model import NGramModel
-from src.inference.predictor import Predictor
 
 load_dotenv('config/.env')
 
-TRAIN_RAW_DIR     = os.environ.get('TRAIN_RAW_DIR')
-EVAL_RAW_DIR      = os.environ.get('EVAL_RAW_DIR')
-TRAIN_TOKENS_FILE = os.environ.get('TRAIN_TOKENS')
-EVAL_TOKENS_FILE  = os.environ.get('EVAL_TOKENS')
-MODEL_PATH        = os.environ.get('MODEL')
-VOCAB_PATH        = os.environ.get('VOCAB')
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+)
+logger = logging.getLogger(__name__)
+
+from src.data_prep.normalizer import Normalizer
+from src.model.ngram_model import NGramModel
+from src.inference.predictor import Predictor
+from src.evaluation.evaluator import Evaluator
+
+REQUIRED_KEYS = ['TRAIN_RAW_DIR', 'EVAL_RAW_DIR', 'TRAIN_TOKENS', 'EVAL_TOKENS', 'MODEL', 'VOCAB']
+
+
+def get_env(key):
+    """Get an environment variable or raise KeyError with a helpful message."""
+    value = os.environ.get(key)
+    if value is None:
+        logger.error("Missing config variable: %s", key)
+        raise KeyError(f"Missing config variable: {key}. Check config/.env.")
+    return value
+
+
+TRAIN_RAW_DIR     = get_env('TRAIN_RAW_DIR')
+EVAL_RAW_DIR      = get_env('EVAL_RAW_DIR')
+TRAIN_TOKENS_FILE = get_env('TRAIN_TOKENS')
+EVAL_TOKENS_FILE  = get_env('EVAL_TOKENS')
+MODEL_PATH        = get_env('MODEL')
+VOCAB_PATH        = get_env('VOCAB')
 
 
 def step_dataprep(normalizer):
@@ -33,34 +56,23 @@ def step_dataprep(normalizer):
                 tokenized_sentences.append(tokens)
         normalizer.save(tokenized_sentences, output_file)
 
-    print("Running data preparation...")
+    logger.info("Running data preparation...")
     _process(TRAIN_RAW_DIR, TRAIN_TOKENS_FILE)
-    print(f"  Saved training tokens to {TRAIN_TOKENS_FILE}")
+    logger.info("Saved training tokens to %s", TRAIN_TOKENS_FILE)
     if os.path.exists(EVAL_RAW_DIR):
         _process(EVAL_RAW_DIR, EVAL_TOKENS_FILE)
-        print(f"  Saved eval tokens to {EVAL_TOKENS_FILE}")
+        logger.info("Saved eval tokens to %s", EVAL_TOKENS_FILE)
 
 
 def step_model(model):
     """Build vocabulary, counts, probabilities, and save model files."""
-    print("Building vocabulary...")
     model.build_vocab(TRAIN_TOKENS_FILE)
-    print(f"  Vocabulary size: {len(model.vocab_list)}")
-
-    print("Building counts and probabilities...")
     model.build_counts_and_probabilities(TRAIN_TOKENS_FILE)
-    for order in range(1, model.ngram_order + 1):
-        key = f"{order}gram"
-        entries = model.model.get(key, {})
-        if order == 1:
-            print(f"  {key}: {len(entries)} entries")
-        else:
-            print(f"  {key}: {len(entries)} contexts")
 
     model.save_model(MODEL_PATH)
-    print(f"  Saved model to {MODEL_PATH}")
+    logger.info("Saved model to %s", MODEL_PATH)
     model.save_vocab(VOCAB_PATH)
-    print(f"  Saved vocab to {VOCAB_PATH}")
+    logger.info("Saved vocab to %s", VOCAB_PATH)
 
 
 def step_inference(model, normalizer):
@@ -79,18 +91,32 @@ def step_inference(model, normalizer):
                 print("Goodbye.")
                 break
             if not text:
+                print("Input text is empty. Please type at least one word.")
                 continue
-            predictions = predictor.predict_next(text)
-            print(f"Predictions: {predictions}")
+            try:
+                predictions = predictor.predict_next(text)
+                print(f"Predictions: {predictions}")
+            except ValueError as e:
+                logger.error("%s", e)
+                print(f"Error: {e}")
     except (KeyboardInterrupt, EOFError):
         print("\nGoodbye.")
+
+
+def step_evaluate(model, normalizer):
+    """Run evaluation on the held-out corpus."""
+    if not model.model:
+        model.load(MODEL_PATH, VOCAB_PATH)
+
+    evaluator = Evaluator(model, normalizer)
+    evaluator.run(EVAL_TOKENS_FILE)
 
 
 def main():
     parser = argparse.ArgumentParser(description="N-gram Predictor CLI")
     parser.add_argument(
         "--step",
-        choices=["dataprep", "model", "inference", "all"],
+        choices=["dataprep", "model", "inference", "evaluate", "all"],
         default="all",
         help="Pipeline step to run",
     )
@@ -107,6 +133,9 @@ def main():
 
     if args.step in ("inference", "all"):
         step_inference(model, normalizer)
+
+    if args.step == "evaluate":
+        step_evaluate(model, normalizer)
 
 
 if __name__ == '__main__':

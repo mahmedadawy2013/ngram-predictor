@@ -41,10 +41,54 @@ Builds n-gram probability tables (1-gram through NGRAM_ORDER-gram) using MLE wit
 ### Module 3 — Inference (`src/inference/predictor.py`)
 Accepts a pre-loaded `NGramModel` and `Normalizer`, normalizes user input, maps OOV words to `<UNK>`, delegates backoff lookup to the model, and returns the top-k predicted next words sorted by probability.
 
+### Module 4 — CLI (`main.py`)
+Single entry point with `--step` argument to run individual pipeline stages or the full pipeline.
+
+### Evaluator (`src/evaluation/evaluator.py`)
+Computes perplexity on a held-out evaluation corpus using cross-entropy: H = -(1/N) Σ log₂ P(wᵢ | context), Perplexity = 2^H. Warns if >20% of words are skipped due to zero probability.
+
+### UI (`src/ui/app.py`)
+`PredictorUI` wraps `Predictor` with an interactive CLI loop and a `get_predictions()` method.
+
 ## Running
 
-```bash
-python3 main.py
+`main.py` accepts a `--step` argument to control which pipeline stage to run:
+
+| Command | What it runs |
+|---------|-------------|
+| `python main.py --step dataprep` | Normalize raw text → produce `train_tokens.txt` |
+| `python main.py --step model` | Build n-gram model → produce `model.json`, `vocab.json` |
+| `python main.py --step inference` | Start interactive CLI prediction loop |
+| `python main.py --step evaluate` | Compute perplexity on the eval corpus |
+| `python main.py --step all` | Run dataprep → model → inference in sequence |
+
+### Example Session
+
+```
+$ python main.py --step inference
+Type a sequence of words and press Enter to get predictions.
+Type 'quit' or press Ctrl+C to exit.
+
+> holmes looked at
+Predictions: ['blessington']
+> the game is
+Predictions: ['up']
+> quit
+Goodbye.
 ```
 
-This will process training data, build the model, and run sample inference queries.
+## Logging
+
+Set `LOG_LEVEL` in `config/.env` to control verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`.
+
+## Exception Handling
+
+Structured exception handling with specific error messages for missing files, malformed JSON, missing config variables, and empty input.
+
+## Testing
+
+```bash
+pytest tests/
+```
+
+42 tests covering Normalizer, NGramModel, Predictor, PredictorUI, and Evaluator.

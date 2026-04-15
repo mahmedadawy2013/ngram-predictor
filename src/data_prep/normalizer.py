@@ -1,6 +1,9 @@
 import os
 import re
 import string
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Normalizer:
     """Text normalizer for preprocessing raw book text: loading, cleaning, tokenizing, and saving the corpus."""
@@ -13,7 +16,15 @@ class Normalizer:
 
         Returns:
             str: Concatenated text from all .txt files in the folder.
+
+        Raises:
+            FileNotFoundError: If the folder does not exist.
         """
+        if not os.path.isdir(folder_path):
+            logger.error("Folder not found: %s", folder_path)
+            raise FileNotFoundError(
+                f"Folder not found: {folder_path}. Check TRAIN_RAW_DIR in config/.env."
+            )
         text = ""
         for filename in os.listdir(folder_path):
             if filename.endswith('.txt'):

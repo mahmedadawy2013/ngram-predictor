@@ -1,5 +1,8 @@
 import os
+import logging
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 
 class Predictor:
@@ -47,7 +50,14 @@ class Predictor:
         Returns:
             list[str]: Context with OOV words replaced by <UNK>.
         """
-        return [w if w in self.model.vocab else '<UNK>' for w in context]
+        mapped = []
+        for w in context:
+            if w in self.model.vocab:
+                mapped.append(w)
+            else:
+                logger.warning("OOV word encountered: '%s' -> <UNK>", w)
+                mapped.append('<UNK>')
+        return mapped
 
     def predict_next(self, text, k=None):
         """
@@ -60,9 +70,16 @@ class Predictor:
         Returns:
             list[str]: Top-k predicted words sorted by probability (highest first).
                        Empty list if no predictions found.
+
+        Raises:
+            ValueError: If input text is empty.
         """
         if k is None:
             k = self.top_k
+
+        if not text or not text.strip():
+            logger.error("Empty input text received")
+            raise ValueError("Input text is empty. Please type at least one word.")
 
         context = self.normalize(text)
         context = self.map_oov(context)
