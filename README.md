@@ -1,22 +1,37 @@
-# NGram Project
+# N-Gram Next-Word Predictor
 
-Project structure for N-gram modeling.
+An n-gram language model that predicts the next word in a sequence using Maximum Likelihood Estimation (MLE) with stupid backoff. The model is trained on Project Gutenberg texts (Sherlock Holmes corpus) and supports configurable n-gram orders, vocabulary thresholding, and perplexity evaluation on a held-out corpus.
 
-## Configuration
+## Requirements
 
-Create a `config/.env` file with the following variables:
+- **Python** 3.10+
+- Dependencies listed in `requirements.txt` (install via pip — see Setup below)
 
-- `TRAIN_RAW_DIR`: Path to the directory containing training .txt files (e.g., `data/raw/train/`)
-- `EVAL_RAW_DIR`: Path to the directory containing evaluation .txt files (e.g., `data/raw/eval/`)
-- `TRAIN_TOKENS`: Path to the output file for training tokens (e.g., `data/processed/train_tokens.txt`)
-- `EVAL_TOKENS`: Path to the output file for evaluation tokens (e.g., `data/processed/eval_tokens.txt`)
-- `MODEL`: Path to the model JSON file (e.g., `data/model/model.json`)
-- `VOCAB`: Path to the vocabulary JSON file (e.g., `data/model/vocab.json`)
-- `UNK_THRESHOLD`: Threshold for unknown words (e.g., `3`)
-- `TOP_K`: Number of top predictions to return (e.g., `3`)
-- `NGRAM_ORDER`: Order of the n-gram model (e.g., `4`)
+## Setup
 
-Example `.env` file:
+### 1. Clone the repository
+
+```bash
+git clone <repository-url>
+cd ngram-predictor
+```
+
+### 2. Create and activate an Anaconda environment
+
+```bash
+conda create -n ngram python=3.12 -y
+conda activate ngram
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure `config/.env`
+
+Create (or verify) the file `config/.env` with the following variables:
 
 ```
 TRAIN_RAW_DIR=data/raw/train/
@@ -28,41 +43,51 @@ VOCAB=data/model/vocab.json
 UNK_THRESHOLD=3
 TOP_K=3
 NGRAM_ORDER=4
+LOG_LEVEL=INFO
 ```
 
-## Modules
+| Variable | Description |
+|---|---|
+| `TRAIN_RAW_DIR` | Folder containing training `.txt` files |
+| `EVAL_RAW_DIR` | Folder containing evaluation `.txt` files |
+| `TRAIN_TOKENS` | Output path for tokenized training sentences |
+| `EVAL_TOKENS` | Output path for tokenized evaluation sentences |
+| `MODEL` | Output path for the trained model (`model.json`) |
+| `VOCAB` | Output path for the vocabulary (`vocab.json`) |
+| `UNK_THRESHOLD` | Minimum word count; rarer words become `<UNK>` |
+| `TOP_K` | Number of top predictions returned |
+| `NGRAM_ORDER` | Maximum n-gram order (e.g. 4 = up to 4-grams) |
+| `LOG_LEVEL` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 
-### Module 1 — Data Preparation (`src/data_prep/normalizer.py`)
-Loads raw `.txt` files, strips Gutenberg headers/footers, normalizes text (lowercase, remove punctuation/numbers/whitespace), tokenizes into sentences and words, and saves to `train_tokens.txt` / `eval_tokens.txt`.
+### 5. Download raw text files
 
-### Module 2 — Model (`src/model/ngram_model.py`)
-Builds n-gram probability tables (1-gram through NGRAM_ORDER-gram) using MLE with stupid backoff. Vocabulary is built with an `UNK_THRESHOLD`; rare words are replaced with `<UNK>`. The `lookup()` method tries the highest-order context first and falls back to lower orders. Outputs `model.json` and `vocab.json`.
+Place Project Gutenberg `.txt` files into the appropriate folders:
 
-### Module 3 — Inference (`src/inference/predictor.py`)
-Accepts a pre-loaded `NGramModel` and `Normalizer`, normalizes user input, maps OOV words to `<UNK>`, delegates backoff lookup to the model, and returns the top-k predicted next words sorted by probability.
+- **Training corpus** → `data/raw/train/` (e.g. Sherlock Holmes novels)
+- **Evaluation corpus** → `data/raw/eval/` (e.g. *The Valley of Fear*, Gutenberg ID 3289)
 
-### Module 4 — CLI (`main.py`)
-Single entry point with `--step` argument to run individual pipeline stages or the full pipeline.
+## Usage
 
-### Evaluator (`src/evaluation/evaluator.py`)
-Computes perplexity on a held-out evaluation corpus using cross-entropy: H = -(1/N) Σ log₂ P(wᵢ | context), Perplexity = 2^H. Warns if >20% of words are skipped due to zero probability.
+`main.py` is the single entry point. Use `--step` to run individual pipeline stages or the full pipeline:
 
-### UI (`src/ui/app.py`)
-`PredictorUI` wraps `Predictor` with an interactive CLI loop and a `get_predictions()` method.
+```bash
+# Step 1 — Data Preparation: normalize raw text → produce token files
+python main.py --step dataprep
 
-## Running
+# Step 2 — Model Training: build vocab, count n-grams, compute MLE probabilities
+python main.py --step model
 
-`main.py` accepts a `--step` argument to control which pipeline stage to run:
+# Step 3 — Interactive Inference: start the CLI prediction loop
+python main.py --step inference
 
-| Command | What it runs |
-|---------|-------------|
-| `python main.py --step dataprep` | Normalize raw text → produce `train_tokens.txt` |
-| `python main.py --step model` | Build n-gram model → produce `model.json`, `vocab.json` |
-| `python main.py --step inference` | Start interactive CLI prediction loop |
-| `python main.py --step evaluate` | Compute perplexity on the eval corpus |
-| `python main.py --step all` | Run dataprep → model → inference in sequence |
+# Step 4 — Evaluation: compute perplexity on the held-out eval corpus
+python main.py --step evaluate
 
-### Example Session
+# Run the full pipeline (dataprep → model → inference)
+python main.py --step all
+```
+
+### Interactive Inference Example
 
 ```
 $ python main.py --step inference
@@ -77,18 +102,103 @@ Predictions: ['up']
 Goodbye.
 ```
 
+### Running the UI
+
+The `PredictorUI` class in `src/ui/app.py` provides a wrapper around the `Predictor`. To launch the interactive UI directly:
+
+```python
+from src.data_prep.normalizer import Normalizer
+from src.model.ngram_model import NGramModel
+from src.inference.predictor import Predictor
+from src.ui.app import PredictorUI
+
+model = NGramModel()
+model.load("data/model/model.json", "data/model/vocab.json")
+predictor = Predictor(model, Normalizer())
+ui = PredictorUI(predictor)
+ui.run()
+```
+
+### Running Tests
+
+All tests are in the `tests/` folder and use **pytest**:
+
+```bash
+# Run all 42 tests
+pytest tests/
+
+# Verbose output
+pytest tests/ -v
+
+# Run a specific test file
+pytest tests/test_model.py -v
+```
+
+| Test file | Module tested | Coverage |
+|---|---|---|
+| `test_data_prep.py` | `Normalizer` | lowercase, punctuation, numbers, whitespace, normalize sequence, strip_gutenberg, sentence/word tokenize, FileNotFoundError |
+| `test_model.py` | `NGramModel` | build_vocab with UNK, lookup (seen/unseen/empty), probabilities sum to 1, load FileNotFoundError, load JSONDecodeError |
+| `test_inference.py` | `Predictor` | predict_next returns k results, sorted by probability, OOV context, empty input ValueError, map_oov |
+| `test_ui.py` | `PredictorUI` | get_predictions returns strings, handles empty/None/whitespace input |
+| `test_evaluation.py` | `Evaluator` | score_word negative float, score_word None for zero prob, perplexity > 1, evaluated count > 0 |
+
+## Project Structure
+
+```
+ngram-predictor/
+├── config/
+│   └── .env                          # Environment variables
+├── data/
+│   ├── model/
+│   │   ├── model.json                # Trained n-gram probability tables
+│   │   └── vocab.json                # Vocabulary list
+│   ├── processed/
+│   │   ├── eval_tokens.txt           # Tokenized evaluation sentences
+│   │   └── train_tokens.txt          # Tokenized training sentences
+│   └── raw/
+│       ├── eval/                     # Raw evaluation .txt files
+│       └── train/                    # Raw training .txt files
+├── src/
+│   ├── data_prep/
+│   │   └── normalizer.py             # Text loading, cleaning, tokenization
+│   ├── evaluation/
+│   │   └── evaluator.py              # Perplexity computation on eval corpus
+│   ├── inference/
+│   │   └── predictor.py              # Normalize → map OOV → lookup → top-k
+│   ├── model/
+│   │   └── ngram_model.py            # Vocab, n-gram counts, MLE probs, backoff
+│   └── ui/
+│       └── app.py                    # PredictorUI interactive CLI wrapper
+├── tests/
+│   ├── test_data_prep.py
+│   ├── test_evaluation.py
+│   ├── test_inference.py
+│   ├── test_model.py
+│   └── test_ui.py
+├── main.py                           # Single entry point (--step argument)
+├── README.md
+└── requirements.txt
+```
+
 ## Logging
 
-Set `LOG_LEVEL` in `config/.env` to control verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`.
+Controlled via `LOG_LEVEL` in `config/.env`:
+
+| Level | What is logged |
+|---|---|
+| `DEBUG` | Every n-gram count, every backoff step during lookup |
+| `INFO` | Module start/end, vocab size, total tokens, model save/load |
+| `WARNING` | OOV words encountered at inference time, high skip ratio in evaluation |
+| `ERROR` | Caught exceptions (missing files, malformed JSON, empty input) |
 
 ## Exception Handling
 
-Structured exception handling with specific error messages for missing files, malformed JSON, missing config variables, and empty input.
+Structured exception handling with specific error messages — no bare `except:` clauses:
 
-## Testing
-
-```bash
-pytest tests/
-```
-
-42 tests covering Normalizer, NGramModel, Predictor, PredictorUI, and Evaluator.
+| Location | Exception | Message |
+|---|---|---|
+| `Normalizer.load()` | `FileNotFoundError` | Folder not found: {path}. Check TRAIN_RAW_DIR in config/.env. |
+| `NGramModel.load()` | `FileNotFoundError` | model.json not found. Run the Model module first. |
+| `NGramModel.load()` | `json.JSONDecodeError` | model.json is malformed. Re-run the Model module. |
+| `main()` env loading | `KeyError` | Missing config variable: {key}. Check config/.env. |
+| `Predictor.predict_next()` | `ValueError` | Input text is empty. Please type at least one word. |
