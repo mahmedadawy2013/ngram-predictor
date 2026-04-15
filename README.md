@@ -29,3 +29,22 @@ UNK_THRESHOLD=3
 TOP_K=3
 NGRAM_ORDER=4
 ```
+
+## Modules
+
+### Module 1 — Data Preparation (`src/data_prep/normalizer.py`)
+Loads raw `.txt` files, strips Gutenberg headers/footers, normalizes text (lowercase, remove punctuation/numbers/whitespace), tokenizes into sentences and words, and saves to `train_tokens.txt` / `eval_tokens.txt`.
+
+### Module 2 — Model (`src/model/ngram_model.py`)
+Builds n-gram probability tables (1-gram through NGRAM_ORDER-gram) using MLE with stupid backoff. Vocabulary is built with an `UNK_THRESHOLD`; rare words are replaced with `<UNK>`. The `lookup()` method tries the highest-order context first and falls back to lower orders. Outputs `model.json` and `vocab.json`.
+
+### Module 3 — Inference (`src/inference/predictor.py`)
+Accepts a pre-loaded `NGramModel` and `Normalizer`, normalizes user input, maps OOV words to `<UNK>`, delegates backoff lookup to the model, and returns the top-k predicted next words sorted by probability.
+
+## Running
+
+```bash
+python3 main.py
+```
+
+This will process training data, build the model, and run sample inference queries.
