@@ -6,10 +6,10 @@ from src.data_prep.normalizer import Normalizer
 load_dotenv('config/.env')
 
 # Define paths from env
-TRAIN_RAW_DIR = os.environ.get('TRAIN_RAW_DIR')
-EVAL_RAW_DIR = os.environ.get('EVAL_RAW_DIR')
-TRAIN_TOKENS_FILE = os.environ.get('TRAIN_TOKENS')
-EVAL_TOKENS_FILE = os.environ.get('EVAL_TOKENS')
+TRAIN_RAW_DIR      = os.environ.get('TRAIN_RAW_DIR')
+EVAL_RAW_DIR       = os.environ.get('EVAL_RAW_DIR')
+TRAIN_TOKENS_FILE  = os.environ.get('TRAIN_TOKENS')
+EVAL_TOKENS_FILE   = os.environ.get('EVAL_TOKENS')
 
 def process_data(raw_dir: str, output_file: str) -> None:
     """Process raw data from a directory and save tokenized output."""
